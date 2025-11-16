@@ -27,13 +27,41 @@ AI 기반 감정 일기 및 심리 분석 웹 애플리케이션
 
 ## 🚀 시작하기
 
+### ⚡ 빠른 시작 (1분)
+
+**Linux/Mac 사용자**:
+```bash
+git clone https://github.com/springseed-park/remindme_app.git
+cd remindme_app
+./quick-start.sh
+```
+
+**Windows 사용자**:
+```cmd
+git clone https://github.com/springseed-park/remindme_app.git
+cd remindme_app
+quick-start.bat
+```
+
+스크립트가 자동으로:
+1. ✅ Node.js 버전 확인
+2. ✅ .env.local 파일 생성
+3. ✅ 의존성 설치
+4. ✅ 개발 서버 실행
+
+**중요**: `.env.local` 파일에서 `OPENAI_API_KEY`를 실제 API 키로 변경해야 합니다!
+
+📖 **상세 가이드**: [SETUP_GUIDE.md](./SETUP_GUIDE.md)에서 VSCode 설정 방법 확인
+
+---
+
 ### 필수 요구사항
 
 - Node.js 18.x 이상
 - npm 또는 yarn
 - OpenAI API Key ([여기서 발급](https://platform.openai.com/api-keys))
 
-### 설치 및 실행
+### 수동 설치 및 실행
 
 1. **저장소 클론**
    ```bash
