@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { DiaryEntry } from '../types';
-import { getEmpatheticResponse, getEmotionAnalysis } from '../services/openaiService';
+import { getEmpatheticResponse, getEmotionAnalysis, generateQuestsForEmotion } from '../services/openaiService';
 
 // Helper to create a date string for `daysAgo` from today at the start of the day (local time)
 const createPastDateISO = (daysAgo: number): string => {
@@ -376,12 +376,15 @@ const sampleEntries: DiaryEntry[] = [
 
 interface DiaryContextType {
   entries: DiaryEntry[];
-  addDiaryEntry: (content: string) => Promise<void>;
+  addDiaryEntry: (content: string, onQuestsGenerated?: (entryId: string) => void) => Promise<void>;
   isStoring: boolean;
   isLoading: boolean;
 }
 
 const DiaryContext = createContext<DiaryContextType | undefined>(undefined);
+
+// 부정적인 감정 리스트 (퀘스트 생성 대상)
+const NEGATIVE_EMOTIONS = ['슬픔', '분노', '불안', '죄책감', '수치심', '외로움', '무기력'];
 
 export const DiaryProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
@@ -416,7 +419,7 @@ export const DiaryProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   }, [entries, isLoading]);
 
-  const addDiaryEntry = useCallback(async (content: string) => {
+  const addDiaryEntry = useCallback(async (content: string, onQuestsGenerated?: (entryId: string) => void) => {
     setIsStoring(true);
     try {
       const previousEntries = entries.slice(0, 3);
@@ -439,6 +442,27 @@ export const DiaryProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         // Keep it sorted
         return updatedEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       });
+
+      // 부정적인 감정이 감지되면 퀘스트 생성
+      if (NEGATIVE_EMOTIONS.includes(analysis.mainEmotion)) {
+        // 퀘스트 생성은 비동기로 처리하되, 일기 저장을 블로킹하지 않음
+        generateQuestsForEmotion(analysis.mainEmotion, content, newEntry.id)
+          .then((quests) => {
+            // QuestContext에서 사용할 수 있도록 localStorage에 저장
+            const existingQuests = localStorage.getItem('quests');
+            const questList = existingQuests ? JSON.parse(existingQuests) : [];
+            const updatedQuests = [...questList, ...quests];
+            localStorage.setItem('quests', JSON.stringify(updatedQuests));
+
+            // 콜백 호출 (선택사항)
+            if (onQuestsGenerated) {
+              onQuestsGenerated(newEntry.id);
+            }
+          })
+          .catch((error) => {
+            console.error('Failed to generate quests:', error);
+          });
+      }
     } catch (error) {
         console.error("Failed to add diary entry:", error);
         // Optionally re-throw or handle the error to notify the UI
