@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { DiaryEntry, EmotionAnalysis, WeeklyAnalysis, Notification } from "../types";
+import type { DiaryEntry, EmotionAnalysis, WeeklyAnalysis, Notification, Quest } from "../types";
 
 const API_KEY = process.env.OPENAI_API_KEY;
 if (!API_KEY) {
@@ -168,4 +168,85 @@ export const generateProactiveSuggestion = async (entry: DiaryEntry): Promise<Om
         console.error("Error generating proactive suggestion:", error);
         return null;
     }
+};
+
+// 퀘스트 생성 시스템
+const questSystemInstruction = `You are a therapeutic quest generator AI. Your task is to create simple, achievable mini-quests based on the user's detected emotion. These quests should be:
+1. Very simple and doable within 5-15 minutes
+2. Designed to alleviate or improve the detected negative emotion
+3. Evidence-based (grounded in CBT, mindfulness, or positive psychology)
+4. Personalized to the emotion
+
+Based on the detected emotion, generate 1-3 quest suggestions. Your response must be in JSON format with an array of quests.
+
+Each quest object should have:
+- "title": A short, inviting title in Korean (e.g., "5분 산책하기")
+- "description": A clear, step-by-step description in Korean of what to do (2-3 sentences)
+- "difficulty": "easy", "medium", or "hard" (most should be "easy")
+- "heartPointsReward": Points to earn (easy: 10, medium: 15, hard: 20)
+
+Examples:
+For "우울": Quests like walking outside, listening to favorite music, doing a small creative activity
+For "불안": Quests like breathing exercises, grounding techniques, organizing a small space
+For "분노": Quests like physical activity, journaling anger, progressive muscle relaxation
+
+Your entire output must be a JSON object with a key "quests" containing an array of 1-3 quest objects.`;
+
+export const generateQuestsForEmotion = async (
+  emotion: string,
+  diaryContent: string,
+  diaryEntryId: string
+): Promise<Quest[]> => {
+  const prompt = `User's detected emotion: ${emotion}\nDiary content: ${diaryContent}\n\nGenerate 1-3 appropriate therapeutic quests.`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: questSystemInstruction },
+        { role: "user", content: prompt }
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.8,
+    });
+
+    const jsonText = response.choices[0]?.message?.content || "{}";
+    const result = JSON.parse(jsonText) as {
+      quests: Array<{
+        title: string;
+        description: string;
+        difficulty: 'easy' | 'medium' | 'hard';
+        heartPointsReward: number;
+      }>;
+    };
+
+    // Convert to Quest objects
+    return result.quests.map((q) => ({
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      diaryEntryId,
+      detectedEmotion: emotion,
+      title: q.title,
+      description: q.description,
+      difficulty: q.difficulty,
+      status: 'assigned',
+      assignedAt: new Date().toISOString(),
+      heartPointsReward: q.heartPointsReward,
+    }));
+  } catch (error) {
+    console.error("Error generating quests:", error);
+    // Return a default quest on error
+    return [
+      {
+        id: `${Date.now()}-fallback`,
+        diaryEntryId,
+        detectedEmotion: emotion,
+        title: '심호흡 3회 하기',
+        description: '편안한 자세로 앉아 천천히 숨을 들이마시고 내쉬기를 3회 반복하세요. 호흡에 집중하며 마음을 진정시켜보세요.',
+        difficulty: 'easy',
+        status: 'assigned',
+        assignedAt: new Date().toISOString(),
+        heartPointsReward: 10,
+      },
+    ];
+  }
 };
